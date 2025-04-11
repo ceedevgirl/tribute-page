@@ -1,0 +1,80 @@
+name: Telegram Daily Reminder
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 7 * * *'  # 7:00 AM Ghana time
+
+jobs:
+  telegram-reminder:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo (to write log file)
+        uses: actions/checkout@v3
+
+      - name: Setup Git
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "actions@github.com"
+
+      - name: Prepare Telegram Message
+        id: prepare
+        env:
+          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          DAY=$(date -u +"%A")
+
+          case $DAY in
+            Monday)
+              TASKS="✅ Review HTML basics%0A✅ Fix semantic errors"
+              ;;
+            Tuesday)
+              TASKS="✅ Practice Flexbox%0A✅ Rebuild layout using flex"
+              ;;
+            Wednesday)
+              TASKS="✅ CSS Grid small project%0A✅ Apply layout responsiveness"
+              ;;
+            Thursday)
+              TASKS="✅ Tweak responsive design%0A✅ Use media queries"
+              ;;
+            Friday)
+              TASKS="✅ Polish a component%0A✅ Push to GitHub"
+              ;;
+            Saturday)
+              TASKS="✅ Try a new technique%0A✅ Watch short tutorial"
+              ;;
+            Sunday)
+              TASKS="✅ Reflect on week%0A✅ Plan new goals"
+              ;;
+          esac
+
+          # Pull GitHub streak info (using GitHub profile page)
+          STREAK=$(curl -s https://github.com/ceedevgirl | grep -oP 'data-view-component="true">\K\d+(?= contributions in the last year)' | head -1 || echo "N/A")
+
+          # Create message
+          MESSAGE="<b>🌞 Good Morning, ceedevgirl!</b>%0A%0A"
+          MESSAGE+="<i>Today's checklist:</i>%0A"
+          MESSAGE+="$TASKS%0A%0A"
+          MESSAGE+="<b>🔥 GitHub Contributions (Past Year):</b> $STREAK%0A"
+          MESSAGE+="<i>Let's go, one div at a time 😎</i>"
+
+          echo "message=$MESSAGE" >> $GITHUB_OUTPUT
+
+      - name: Send Telegram message
+        env:
+          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          curl -s -X POST https://api.telegram.org/bot$BOT_TOKEN/sendMessage \
+            -d chat_id=$CHAT_ID \
+            -d parse_mode=HTML \
+            -d text="${{ steps.prepare.outputs.message }}"
+
+      - name: Update log file
+        run: |
+          echo "✅ $DAY - Task sent at 7:00AM" >> daily-log.md
+          git add daily-log.md
+          git commit -m "Log: $DAY reminder sent"
+          git push
